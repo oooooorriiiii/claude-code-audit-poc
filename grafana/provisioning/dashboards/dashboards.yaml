@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: claude-code-audit
+    orgId: 1
+    folder: Claude Code Audit
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /var/lib/grafana/dashboards

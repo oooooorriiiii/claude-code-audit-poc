@@ -1,0 +1,16 @@
+# === 機密/生成データ: コミット禁止 ===
+# OTel file exporter の生ログ(会話本文・メール等を含む)。ディレクトリは .gitkeep のみ残す
+data/otel-file/*
+!data/otel-file/.gitkeep
+# Messages API の request/response 全文(会話履歴・機微情報)
+data/api-bodies/
+
+# === ツール生成物 ===
+node_modules/
+package-lock.json
+demo/_video/
+# webm は mp4 から再生成可能なので除外(mp4/gif はリポジトリに含める)
+demo/*.webm
+
+# === ローカル設定 ===
+docker-compose.override.yml

@@ -1,0 +1,31 @@
+flowchart LR
+  subgraph HOST["ホスト（あなたの Laptop）"]
+    CC["Claude Code<br/>（Pro）"]
+  end
+
+  subgraph DOCKER["Docker Compose（ローカル）"]
+    COL["OTel Collector<br/>受信:4317 / 振り分け"]
+    PROM[("Prometheus<br/>メトリクス")]
+    LOKI[("Loki<br/>ログ／イベント")]
+    TEMPO[("Tempo<br/>トレース")]
+    FILE["ファイル保存<br/>data/otel-file/*.json"]
+    GRAF["Grafana<br/>:3001 で可視化"]
+  end
+
+  CC -- "OTLP（gRPC 4317）" --> COL
+  COL -- メトリクス --> PROM
+  COL -- ログ --> LOKI
+  COL -- トレース --> TEMPO
+  COL -- 生ログ保全 --> FILE
+  PROM --> GRAF
+  LOKI --> GRAF
+  TEMPO --> GRAF
+
+  classDef host fill:#0f3460,stroke:#4ec9b0,color:#fff;
+  classDef store fill:#1e1e2e,stroke:#888,color:#eee;
+  classDef hub fill:#3a2e5c,stroke:#c792ea,color:#fff;
+  classDef viz fill:#244a3a,stroke:#6ec46e,color:#fff;
+  class CC host;
+  class COL hub;
+  class PROM,LOKI,TEMPO,FILE store;
+  class GRAF viz;

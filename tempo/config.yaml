@@ -1,0 +1,36 @@
+# Minimal single-binary Tempo, local storage, OTLP receiver.
+# NOTE: Claude Code emits OTLP traces only in BETA, gated behind
+#   CLAUDE_CODE_ENHANCED_TELEMETRY_BETA=1 + OTEL_TRACES_EXPORTER=otlp
+# (see claude-audit-full.sh). With those set, spans land here:
+#   claude_code.interaction -> llm_request / tool(-> blocked_on_user, execution) / hook
+# Without the beta flag, Claude Code sends no traces and this backend stays empty.
+
+server:
+  http_listen_port: 3200
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+
+ingester:
+  max_block_duration: 5m
+
+compactor:
+  compaction:
+    block_retention: 720h   # 30 days
+
+storage:
+  trace:
+    backend: local
+    wal:
+      path: /var/tempo/wal
+    local:
+      path: /var/tempo/blocks
+
+usage_report:
+  reporting_enabled: false

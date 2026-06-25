@@ -1,0 +1,14 @@
+{
+  "name": "claude-code-audit-poc",
+  "version": "1.0.0",
+  "description": "ローカル Laptop 1 台で Claude Code の利用ログを OpenTelemetry で収集・保存・可視化する Audit PoC（デモ録画 / スライド生成用の Playwright を含む）",
+  "private": true,
+  "scripts": {
+    "gui-demo": "node demo/gui-demo.mjs"
+  },
+  "license": "MIT",
+  "type": "commonjs",
+  "devDependencies": {
+    "playwright": "^1.61.1"
+  }
+}

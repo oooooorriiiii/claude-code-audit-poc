@@ -1,0 +1,90 @@
+# OpenTelemetry Collector (contrib) configuration
+# Receives OTLP from Claude Code on the host and fans signals out to:
+#   - Prometheus (metrics, via scrape endpoint :8889)
+#   - Loki       (logs/events, via native OTLP push)
+#   - Tempo      (traces, via OTLP)
+#   - file       (raw JSON on disk for offline audit)
+#   - debug      (stdout, for live troubleshooting)
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+    timeout: 5s
+  # Tag every record so it's obvious in storage which collector produced it.
+  resource/audit:
+    attributes:
+      - key: collector.source
+        value: claude-code-audit-poc
+        action: upsert
+
+exporters:
+  # --- Metrics -> Prometheus ----------------------------------------------
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    # Promote OTLP resource attributes (user.id, session.id, ...) to labels.
+    resource_to_telemetry_conversion:
+      enabled: true
+    enable_open_metrics: true
+
+  # --- Logs/events -> Loki (native OTLP endpoint) -------------------------
+  otlphttp/loki:
+    endpoint: http://loki:3100/otlp
+    tls:
+      insecure: true
+
+  # --- Traces -> Tempo ----------------------------------------------------
+  otlp/tempo:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+
+  # --- Everything -> local files (raw audit trail) ------------------------
+  file/metrics:
+    path: /data/otel-file/metrics.json
+    rotation:
+      max_megabytes: 100
+      max_days: 30
+      max_backups: 10
+  file/logs:
+    path: /data/otel-file/logs.json
+    rotation:
+      max_megabytes: 100
+      max_days: 30
+      max_backups: 10
+  file/traces:
+    path: /data/otel-file/traces.json
+    rotation:
+      max_megabytes: 100
+      max_days: 30
+      max_backups: 10
+
+  # --- Everything -> collector stdout (docker logs otel-collector) --------
+  debug:
+    verbosity: detailed
+
+service:
+  telemetry:
+    logs:
+      level: info
+    metrics:
+      address: 0.0.0.0:8888
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      processors: [resource/audit, batch]
+      exporters: [prometheus, file/metrics, debug]
+    logs:
+      receivers: [otlp]
+      processors: [resource/audit, batch]
+      exporters: [otlphttp/loki, file/logs, debug]
+    traces:
+      receivers: [otlp]
+      processors: [resource/audit, batch]
+      exporters: [otlp/tempo, file/traces, debug]
