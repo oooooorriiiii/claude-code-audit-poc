@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claude Code をローカルで監査する</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/black.css" id="theme">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/monokai.css">
+  <style>
+    :root { --r-main-font-size: 30px; }
+    .reveal h1 { font-size: 1.7em; }
+    .reveal h2 { font-size: 1.25em; color: #4ec9b0; }
+    .reveal section img { border: none; box-shadow: 0 4px 18px rgba(0,0,0,.5); margin: 8px; border-radius: 6px; }
+    .reveal pre { width: 100%; font-size: 0.5em; box-shadow: none; }
+    .reveal pre code { max-height: 520px; padding: 14px; border-radius: 8px; }
+    .reveal table { font-size: 0.62em; }
+    .reveal .small { font-size: 0.6em; color: #bbb; }
+    .reveal .hl { color: #f6c177; font-weight: bold; }
+    .reveal .ok { color: #6ec46e; }
+    .reveal .warn { color: #f08080; }
+    .reveal .arch { font-family: monospace; font-size: 0.52em; line-height: 1.35; text-align: left;
+      display: inline-block; background: #1e1e2e; padding: 18px 24px; border-radius: 10px; }
+    .reveal .cols { display: flex; gap: 24px; align-items: center; justify-content: center; }
+    .reveal .cols > div { flex: 1; }
+    .reveal .tag { display:inline-block; background:#333; color:#4ec9b0; padding:2px 10px;
+      border-radius: 12px; font-size:0.5em; margin:2px; font-family: monospace; }
+    .footer { position: fixed; bottom: 8px; right: 16px; font-size: 14px; color: #666; }
+  </style>
+</head>
+<body>
+<div class="reveal"><div class="slides">
+
+  <!-- 1. Title -->
+  <section data-background-gradient="linear-gradient(to bottom, #1a1a2e, #0f3460)">
+    <h1>Claude Code を<br>ローカルで監査する</h1>
+    <p>OpenTelemetry で「誰が・何を入力し・何をさせたか」を手元に残す</p>
+    <p class="small">単一 Laptop + Docker Compose / Claude Code Pro</p>
+    <aside class="notes">
+      こんにちは。Claude Code を組織で使うとき「監査ログ、どこまで取れるの?」という話をします。
+      結論、Pro プランでも自分の Laptop だけで、入力からツール実行まで全部ローカルに残せます。5分で実演します。
+    </aside>
+  </section>
+
+  <!-- 2. 課題 -->
+  <section>
+    <h2>課題</h2>
+    <ul>
+      <li>Claude Code は強力 = <span class="hl">何でもできる</span>(bash・ファイル編集・MCP)</li>
+      <li>「誰が・何を入力し・どのツールを・どう判断して実行したか」を<br>後から追跡したい</li>
+      <li>でも 外部 SaaS に会話を送りたくない → <span class="hl">手元で完結</span>させたい</li>
+    </ul>
+    <p class="small">→ Claude Code の <span class="hl">OpenTelemetry 出力</span>をローカルで受けて保存・可視化する</p>
+    <aside class="notes">
+      課題はシンプル。Claude Code は bash もファイル編集もできる。だから監査したい。
+      でも会話を外のサービスに出したくない。手元で完結させたい。
+      実は Claude Code は OpenTelemetry で利用状況を吐けるので、それをローカルで受けます。
+    </aside>
+  </section>
+
+  <!-- 2.5 前提知識 (OTel 未経験者向け) -->
+  <section>
+    <h2>前提: この3つだけ押さえれば OK</h2>
+    <table style="font-size:0.7em">
+      <tr><th>種類</th><th>何を表すか</th><th>保存先</th></tr>
+      <tr><td><span class="hl">メトリクス</span></td><td>数値の時系列<br><span class="small">例: トークン数・コスト・回数 → 「いつ・どれだけ」</span></td><td>Prometheus</td></tr>
+      <tr><td><span class="hl">ログ/イベント</span></td><td>1件1件の出来事<br><span class="small">例: 誰が何を入力・どのツール実行 → 「何が起きた」</span></td><td>Loki</td></tr>
+      <tr><td><span class="hl">トレース</span></td><td>1リクエストの処理の流れと所要時間<br><span class="small">→ 「どの順で・どこが遅い」</span></td><td>Tempo</td></tr>
+    </table>
+    <p class="small" style="margin-top:16px">
+      これらを吐き出す共通規格が <span class="hl">OpenTelemetry (OTel)</span>。Claude Code は標準対応。<br>
+      <span class="small">※ Zabbix / Datadog / ELK 等を運用した経験があれば「監視データの“送る側”を標準化したもの」と思えば OK</span>
+    </p>
+    <aside class="notes">
+      OTel を触ったことがない方向けに、前提だけ。監視データは大きく3種類です。
+      数値の時系列＝メトリクス、これは Prometheus に。1件1件の出来事＝ログ/イベント、これは Loki に。
+      1つの処理の流れと所要時間＝トレース、これは Tempo に入れます。
+      これらを標準フォーマットで吐き出す仕組みが OpenTelemetry。
+      Zabbix や Datadog、ELK を運用された経験があれば、その“データを送る側”を業界標準にしたもの、と捉えてください。
+    </aside>
+  </section>
+
+  <!-- 3. アーキテクチャ -->
+  <section>
+    <h2>アーキテクチャ</h2>
+    <img src="img/architecture.png" alt="architecture" style="max-height:480px; background:#faf8e8; padding:8px; border-radius:8px">
+    <p class="small">ホストの <code>claude</code> に環境変数を渡すだけ。受信側(Collector〜Grafana)は <code>docker compose up</code> 一発。</p>
+    <aside class="notes">
+      構成はこれだけです。普段ログ基盤を運用されている方なら馴染みのある形だと思います。
+      左のホストで動く Claude Code が、テレメトリを「OTel Collector」という受け口に送ります(OTLP という共通フォーマット、gRPC の 4317 番)。
+      Collector はいわば仕分け係で、数値のメトリクスは Prometheus、ログ/イベントは Loki、トレースは Tempo に振り分け、
+      同時に生 JSON をファイルにも保全します。最後に Grafana で全部まとめて見る。受信側は全部 Docker、compose 一発で立ちます。
+    </aside>
+  </section>
+
+  <!-- 4. デフォルトで取れるもの -->
+  <section>
+    <h2>デフォルトで取れるもの</h2>
+    <div class="cols">
+      <div>
+        <p class="hl">Metrics</p>
+        <span class="tag">token.usage</span><span class="tag">cost.usage</span>
+        <span class="tag">session.count</span><span class="tag">lines_of_code</span>
+        <span class="tag">code_edit.decision</span><span class="tag">active_time</span>
+      </div>
+      <div>
+        <p class="hl">Events (logs)</p>
+        <span class="tag">user_prompt</span><span class="tag">tool_result</span>
+        <span class="tag">tool_decision</span><span class="tag">api_request</span>
+        <span class="tag">api_error</span><span class="tag">mcp / auth / skill …</span>
+      </div>
+    </div>
+    <p class="small" style="margin-top:18px">
+      共通属性: <code>session.id / user.email / organization.id / terminal.type / model …</code><br>
+      <span class="ok">✓</span> 「誰が・いつ・どのツールを・成否・トークン/コスト」はこれだけで取れる
+    </p>
+    <p class="small warn" style="margin-top:10px">
+      ※ コストは「API 単価で計算した推定値」。Pro/Max などの定額プランでは実際には課金されない(利用量の目安)
+    </p>
+    <aside class="notes">
+      まず素の状態。メトリクスでトークン・コスト・セッション数。
+      イベントで user_prompt、tool_result、api_request など。
+      各レコードに user.email や session.id が付くので、誰がどのツールをいくらで使ったかはこれで分かります。
+      ただし「中身」、入力本文や Claude の回答は、デフォルトでは伏せられています。
+    </aside>
+  </section>
+
+  <!-- 5. 山場: privacy フラグで中身まで -->
+  <section>
+    <h2>★ フラグを開けると「中身」まで取れる</h2>
+    <table>
+      <tr><th>取りたいもの</th><th>環境変数</th></tr>
+      <tr><td>ユーザ入力 本文</td><td><code>OTEL_LOG_USER_PROMPTS=1</code></td></tr>
+      <tr><td>tool 入力引数 (bash cmd, path…)</td><td><code>OTEL_LOG_TOOL_DETAILS=1</code></td></tr>
+      <tr><td>tool 入出力 コンテンツ</td><td><code>OTEL_LOG_TOOL_CONTENT=1</code> <span class="small">(traces必須)</span></td></tr>
+      <tr><td><span class="hl">Claude 出力本文・会話履歴全文</span></td><td><code>OTEL_LOG_RAW_API_BODIES=1</code></td></tr>
+      <tr><td>分散トレース (interaction→tool)</td><td><code>CLAUDE_CODE_ENHANCED_TELEMETRY_BETA=1</code></td></tr>
+    </table>
+    <p class="small">既定はすべて OFF(プライバシー)。<span class="warn">有効化すると会話全文・bash コマンド・ファイル内容が残る → 取扱い注意</span></p>
+    <aside class="notes">
+      ここが山場。これらのフラグを開けると、入力本文、ツールの引数、ツールの入出力、
+      そして Claude の出力本文・会話履歴の全文、さらに分散トレースまで取れます。
+      デフォルト OFF なのはプライバシーのため。逆に言うと、開ければ監査に必要なものはほぼ全部取れる。
+      次のデモで実際に取れているところを見せます。
+    </aside>
+  </section>
+
+  <!-- 6. デモ -->
+  <section>
+    <h2>デモ: 実際に取れている</h2>
+    <img src="../demo/demo.gif" alt="terminal demo" style="max-height:560px">
+    <p class="small">入力本文 → Claude 出力本文 → tool 引数 → トレース階層 が全部ローカルに</p>
+    <aside class="notes">
+      デモです。フル監査モードで claude を1回叩いて、
+      ① 入力本文、② Claude の出力本文、③ ツールの入力引数、④ Tempo のトレース階層、
+      の順に、ローカルに残ったものを表示しています。全部手元のファイルとバックエンドに入っています。
+    </aside>
+  </section>
+
+  <!-- 7. Grafana -->
+  <section>
+    <h2>Grafana で可視化（GUI ウォークスルー）</h2>
+    <video src="../demo/gui-demo.mp4" data-autoplay muted loop controls
+           style="max-height:560px; border-radius:8px"></video>
+    <p class="small">ダッシュボード → ログ(Loki) → トレース(Tempo) を字幕付きで解説 / 詳細は <code>presentation/gui-guide.md</code></p>
+    <aside class="notes">
+      可視化は Grafana。動画で順に解説しています。
+      まずダッシュボードで“量”の全体像、トークン・コスト・セッション数。
+      次に Loki でイベントの“中身”、行を開くと user.email や入力本文まで属性が見える。
+      最後に Tempo でトレース、1プロンプトの処理の流れと、ツールのどこで時間がかかったかが分解できます。
+      ログの trace_id からトレースへ、相互ジャンプも設定済みです。
+    </aside>
+  </section>
+
+  <!-- 8. まとめ -->
+  <section data-background-gradient="linear-gradient(to bottom, #0f3460, #1a1a2e)">
+    <h2>まとめ</h2>
+    <ul>
+      <li><span class="ok">✓</span> Laptop + docker compose だけで監査基盤が立つ</li>
+      <li><span class="ok">✓</span> テレメトリ単独で<br>　入力・出力・tool入出力・トレースまで取得可能</li>
+      <li><span class="warn">!</span> 唯一の限界 = <span class="hl">extended thinking はマスク</span></li>
+      <li><span class="warn">!</span> フルモードは機微情報の塊 → 保存先・保持期間・アクセス制御に注意</li>
+    </ul>
+    <p class="small">リポジトリ: <code>claude-code-audit-poc</code> / README に再現手順</p>
+    <p class="small">出典: code.claude.com/docs/ja/monitoring-usage</p>
+    <aside class="notes">
+      まとめ。Laptop と docker compose だけで監査基盤は立つ。
+      テレメトリ単独で、入力・出力・ツール入出力・トレースまで取れる。
+      唯一取れないのは extended thinking の本文だけ。
+      ただしフルモードは会話全文が残るので、保存先や保持期間、アクセス制御はちゃんと設計してください。以上です。
+    </aside>
+  </section>
+
+</div></div>
+<div class="footer">Claude Code Audit PoC</div>
+
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/notes/notes.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/highlight.js"></script>
+<script>
+  Reveal.initialize({
+    hash: true, slideNumber: 'c/t', transition: 'slide',
+    plugins: [ RevealNotes, RevealHighlight ]
+  });
+</script>
+</body>
+</html>

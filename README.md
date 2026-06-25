@@ -29,19 +29,24 @@ Host                          Docker (docker-compose)
 | `grafana/dashboards/claude-code-audit.json` | スターターダッシュボード |
 | `claude-code-env.sh` | ホストで Claude Code に設定する環境変数 |
 | `claude-audit.sh` / `claude-audit-full.sh` | 通常 / フル監査の実行ラッパー(env はそのプロセス限り) |
-| `presentation/` | reveal.js スライド + 台本 + GUI解説 (`index.html` / `script.md` / `gui-guide.md`) |
+| `presentation/` | reveal.js スライド + 台本 + GUI解説。`index.html`(文書型/学術・エンジニアリング向け・読むだけで伝わる) / `index-lightning.html`(LT型) / `script.md`(LT台本) / `gui-guide.md`(GUI解説) |
 | `demo/` | デモ自動化: `build.sh`(一括) / `seed.sh` / `capture-grafana.sh` / `demo.tape`(端末VHS) / `gui-demo.mjs`(GUI Playwright) |
 
 ## 発表 / デモ資料
 
 ```bash
 bash demo/build.sh        # ツール導入→stack→データ投入→Grafana PNG→端末動画(VHS) を一括生成
-open presentation/index.html   # スライド (S キーで台本=speaker notes)
+open presentation/index.html             # 文書型スライド(学術・エンジニアリング向け)
+open presentation/index-lightning.html   # ライトニングトーク型(S キーで台本)
 ```
-生成物:
-- `demo/demo.gif` `demo/demo.mp4` — 端末デモ(VHS)
-- `demo/gui-demo.mp4` `demo/gui-demo.gif` — Grafana GUI ウォークスルー(字幕付き / Playwright)
-- `presentation/img/architecture.png` — Mermaid アーキ図 / `presentation/img/panel-*.png` — Grafana 静止画
+生成物(動画):
+- **`demo/walkthrough.mp4`** — 統合デモ(主)。①実機の Claude Code CLI で実行(Write/Read/Bash が画面に出る)→②メトリクス→③ログ→④トレース。各章で「CLI操作⇄テレメトリ」の対応を日本語で明示。文言は `demo/record-results.mjs` 冒頭の `CAPS` で編集(`demo/build-walkthrough.sh`)
+- `demo/side-by-side.mp4` `.gif` — 左=CLI / 右=Grafana を同一時系列で対比(`demo/build-sidebyside.sh`)
+- `demo/gui-demo.mp4` `.gif` — Grafana GUI 詳細ウォークスルー(字幕付き)。字幕は `demo/gui-demo.mjs` 冒頭の `STEPS` で編集可
+- `demo/demo.gif` `.mp4` — 端末のみの簡易デモ(VHS)
+
+生成物(図):
+- `presentation/img/architecture.png`(Mermaid)/ `trace-waterfall.png`(Tempo)/ `panel-*.png`(Grafana 静止画)
 
 台本: `presentation/script.md`(5分ライトニング、GUI 詳説で伸長可) / GUI 各画面の解説: `presentation/gui-guide.md`。
 

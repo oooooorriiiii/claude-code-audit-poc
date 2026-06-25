@@ -9,8 +9,15 @@ data/api-bodies/
 node_modules/
 package-lock.json
 demo/_video/
+demo/_side/
 # webm は mp4 から再生成可能なので除外(mp4/gif はリポジトリに含める)
 demo/*.webm
+
+# === デモ実行で Claude が生成する一時ファイル ===
+/report.txt
+/poc.txt
+/poc_test.txt
+/probe.txt
 
 # === ローカル設定 ===
 docker-compose.override.yml

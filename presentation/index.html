@@ -3,204 +3,444 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Claude Code をローカルで監査する</title>
+  <title>OpenTelemetryを活用したClaude CodeのObservability検証</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/black.css" id="theme">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/monokai.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/white.css" id="theme">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/atom-one-light.css">
   <style>
-    :root { --r-main-font-size: 30px; }
-    .reveal h1 { font-size: 1.7em; }
-    .reveal h2 { font-size: 1.25em; color: #4ec9b0; }
-    .reveal section img { border: none; box-shadow: 0 4px 18px rgba(0,0,0,.5); margin: 8px; border-radius: 6px; }
-    .reveal pre { width: 100%; font-size: 0.5em; box-shadow: none; }
-    .reveal pre code { max-height: 520px; padding: 14px; border-radius: 8px; }
-    .reveal table { font-size: 0.62em; }
-    .reveal .small { font-size: 0.6em; color: #bbb; }
-    .reveal .hl { color: #f6c177; font-weight: bold; }
-    .reveal .ok { color: #6ec46e; }
-    .reveal .warn { color: #f08080; }
-    .reveal .arch { font-family: monospace; font-size: 0.52em; line-height: 1.35; text-align: left;
-      display: inline-block; background: #1e1e2e; padding: 18px 24px; border-radius: 10px; }
-    .reveal .cols { display: flex; gap: 24px; align-items: center; justify-content: center; }
-    .reveal .cols > div { flex: 1; }
-    .reveal .tag { display:inline-block; background:#333; color:#4ec9b0; padding:2px 10px;
-      border-radius: 12px; font-size:0.5em; margin:2px; font-family: monospace; }
-    .footer { position: fixed; bottom: 8px; right: 16px; font-size: 14px; color: #666; }
+    :root{ --ink:#1c2330; --muted:#5b6472; --accent:#0e7490; --line:#d4dae3; --navy:#0b3d57; }
+    .reveal{ font-family:"Noto Sans CJK JP","Hiragino Sans","Yu Gothic",sans-serif; color:var(--ink); font-size:23px; }
+    .reveal .slides{ text-align:left; }
+    .reveal .slides section{ height:100%; top:0!important; padding:18px 30px 44px; box-sizing:border-box; }
+    .reveal h1{ font-size:1.55em; color:var(--navy); line-height:1.25; }
+    .reveal h2{ font-size:1.18em; color:var(--navy); border-bottom:3px solid var(--accent); padding-bottom:8px; margin-bottom:14px; }
+    .reveal h3{ font-size:0.92em; color:var(--accent); margin:10px 0 4px; }
+    .reveal p,.reveal li{ line-height:1.5; }
+    .reveal ul,.reveal ol{ margin:0; padding-left:1.3em; }
+    .reveal p,.reveal table,.reveal pre,.reveal figure{ max-width:100%; box-sizing:border-box; }
+    .reveal li{ margin:5px 0; }
+    .eyebrow{ font-size:0.6em; letter-spacing:.15em; color:var(--accent); font-weight:700; text-transform:uppercase; margin-bottom:2px; }
+    .reveal table{ font-size:0.6em; border-collapse:collapse; width:100%; margin:6px 0; }
+    .reveal th,.reveal td{ border:1px solid var(--line); padding:5px 9px; text-align:left; vertical-align:top; }
+    .reveal th{ background:#eef3f7; color:var(--navy); }
+    .reveal tr:nth-child(even) td{ background:#f7f9fb; }
+    .reveal code{ background:#eef1f4; padding:1px 6px; border-radius:4px; font-size:0.85em; color:#9a2a2a; }
+    .reveal pre{ width:100%; font-size:0.46em; box-shadow:none; margin:6px 0; }
+    .reveal pre code{ padding:12px 14px; border:1px solid var(--line); border-radius:6px; background:#fbfcfd; }
+    figure{ margin:6px 0; text-align:center; }
+    figure img,figure video{ border:1px solid var(--line); border-radius:6px; max-height:480px; }
+    figcaption{ font-size:0.56em; color:var(--muted); margin-top:5px; font-style:italic; }
+    .cols{ display:flex; gap:22px; }
+    .cols>div{ flex:1; }
+    .small{ font-size:0.62em; color:var(--muted); }
+    .key{ color:var(--accent); font-weight:700; }
+    .warn{ color:#b4341f; font-weight:700; }
+    .ok{ color:#1f7a3d; font-weight:700; }
+    .abstract{ background:#f4f8fa; border-left:4px solid var(--accent); padding:12px 18px; font-size:0.8em; border-radius:0 6px 6px 0; }
+    .reveal .slide-number{ font-size:15px; background:transparent; color:var(--muted); }
+    .foot{ position:absolute; bottom:10px; left:30px; right:30px; display:flex; justify-content:space-between;
+           font-size:13px; color:#9aa3b0; border-top:1px solid var(--line); padding-top:5px; }
   </style>
 </head>
 <body>
 <div class="reveal"><div class="slides">
 
-  <!-- 1. Title -->
-  <section data-background-gradient="linear-gradient(to bottom, #1a1a2e, #0f3460)">
-    <h1>Claude Code を<br>ローカルで監査する</h1>
-    <p>OpenTelemetry で「誰が・何を入力し・何をさせたか」を手元に残す</p>
-    <p class="small">単一 Laptop + Docker Compose / Claude Code Pro</p>
-    <aside class="notes">
-      こんにちは。Claude Code を組織で使うとき「監査ログ、どこまで取れるの?」という話をします。
-      結論、Pro プランでも自分の Laptop だけで、入力からツール実行まで全部ローカルに残せます。5分で実演します。
-    </aside>
+  <!-- 0. 表紙 + アブストラクト -->
+  <section>
+    <div class="eyebrow">技術検証レポート</div>
+    <h1>OpenTelemetryを活用したClaude CodeのObservability検証</h1>
+    <p class="small" style="margin:10px 0 16px">検証日: 2026-06-25 &nbsp;|&nbsp; 対象: Claude Code v2.1.179</p>
+    <div class="abstract">
+      <b>まとめ</b> 
+      <li>
+        構成：
+        <ul>
+          <li>
+            OpenTelemetry (OTel) Collector
+          </li>
+          <li>
+            Prometheus
+          </li>
+          <li>
+            Loki
+          </li>
+          <li>
+            Tempo
+          </li>
+          <li>
+            Grafana
+          </li>
+        </ul>
+      </li>
+      <li>
+        取得できる：ユーザ入力本文・モデル出力本文・ツール入出力・分散トレース
+      </li>
+      <li>
+        取得できない：拡張思考 (extended thinking) 本文
+      </li>
+    </div>
+    <div class="foot"><span>Claude Code Audit PoC</span><span>0 / 14</span></div>
   </section>
 
-  <!-- 2. 課題 -->
+  <!-- 1. 背景と目的 -->
   <section>
-    <h2>課題</h2>
+    <div class="eyebrow">1. Introduction</div>
+    <h2>背景と目的</h2>
+    <h3>背景</h3>
     <ul>
-      <li>Claude Code は強力 = <span class="hl">何でもできる</span>(bash・ファイル編集・MCP)</li>
-      <li>「誰が・何を入力し・どのツールを・どう判断して実行したか」を<br>後から追跡したい</li>
-      <li>でも 外部 SaaS に会話を送りたくない → <span class="hl">手元で完結</span>させたい</li>
+      <li>Claude Code はシェル実行・ファイル編集・MCP 連携など<b>広範な操作権限</b>を持つエージェントである。</li>
+      <li>組織利用では「誰が・何を入力し・どのツールを・どう承認して実行し・何が出力されたか」を
+          事後に追跡できること(=監査証跡)が、要求される。</li>
     </ul>
-    <p class="small">→ Claude Code の <span class="hl">OpenTelemetry 出力</span>をローカルで受けて保存・可視化する</p>
-    <aside class="notes">
-      課題はシンプル。Claude Code は bash もファイル編集もできる。だから監査したい。
-      でも会話を外のサービスに出したくない。手元で完結させたい。
-      実は Claude Code は OpenTelemetry で利用状況を吐けるので、それをローカルで受けます。
-    </aside>
+    <h3>目的</h3>
+    <ul>
+      <li>Claude Code の OTel 出力から<b>実際に取得できる監査情報の範囲を実機検証する</b>。</li>
+      <li>取得に伴うプライバシー上の制御点と限界を整理する。</li>
+    </ul>
+    <div class="foot"><span>Claude Code Audit PoC</span><span>1 / 14</span></div>
   </section>
 
-  <!-- 2.5 前提知識 (OTel 未経験者向け) -->
+  <!-- 2. 前提技術 -->
   <section>
-    <h2>前提: この3つだけ押さえれば OK</h2>
-    <table style="font-size:0.7em">
-      <tr><th>種類</th><th>何を表すか</th><th>保存先</th></tr>
-      <tr><td><span class="hl">メトリクス</span></td><td>数値の時系列<br><span class="small">例: トークン数・コスト・回数 → 「いつ・どれだけ」</span></td><td>Prometheus</td></tr>
-      <tr><td><span class="hl">ログ/イベント</span></td><td>1件1件の出来事<br><span class="small">例: 誰が何を入力・どのツール実行 → 「何が起きた」</span></td><td>Loki</td></tr>
-      <tr><td><span class="hl">トレース</span></td><td>1リクエストの処理の流れと所要時間<br><span class="small">→ 「どの順で・どこが遅い」</span></td><td>Tempo</td></tr>
-    </table>
-    <p class="small" style="margin-top:16px">
-      これらを吐き出す共通規格が <span class="hl">OpenTelemetry (OTel)</span>。Claude Code は標準対応。<br>
-      <span class="small">※ Zabbix / Datadog / ELK 等を運用した経験があれば「監視データの“送る側”を標準化したもの」と思えば OK</span>
+    <div class="eyebrow">2. Background</div>
+    <h2>OpenTelemetry</h2>
+    <p class="small">
+      <li>
+        OpenTelemetry (OTel) は観測データを送出するための標準規格。
+      </li>
+      <li>
+        信号は3種に大別される。
+      </li>
     </p>
-    <aside class="notes">
-      OTel を触ったことがない方向けに、前提だけ。監視データは大きく3種類です。
-      数値の時系列＝メトリクス、これは Prometheus に。1件1件の出来事＝ログ/イベント、これは Loki に。
-      1つの処理の流れと所要時間＝トレース、これは Tempo に入れます。
-      これらを標準フォーマットで吐き出す仕組みが OpenTelemetry。
-      Zabbix や Datadog、ELK を運用された経験があれば、その“データを送る側”を業界標準にしたもの、と捉えてください。
-    </aside>
+    <table>
+      <tr><th>信号</th><th>定義</th><th>監査での意味</th><th>本PoCの保存先</th></tr>
+      <tr><td><b>メトリクス</b></td><td>数値の時系列</td><td>「いつ・どれだけ」使ったか(量)</td><td>Prometheus</td></tr>
+      <tr><td><b>ログ/イベント</b></td><td>個々の出来事の記録</td><td>「何が起きたか」(入力・ツール実行等)</td><td>Loki</td></tr>
+      <tr><td><b>トレース</b></td><td>1リクエストの処理経路と所要時間</td><td>「どの順序で処理されたか・どこが遅いか」</td><td>Tempo</td></tr>
+    </table>
+    <p class="small">
+    <li>
+      Claude Code は環境変数の設定により、これら3信号を OTLP (gRPC/HTTP) で出力する機能を標準で備える。
+    </li>
+    <li>
+      本検証ではこの出力を手元の Collector で受信する。
+    </li></p>
+    <div class="foot"><span>Claude Code Audit PoC</span><span>2 / 14</span></div>
   </section>
 
-  <!-- 3. アーキテクチャ -->
+  <!-- 3. システム構成 -->
   <section>
-    <h2>アーキテクチャ</h2>
-    <img src="img/architecture.png" alt="architecture" style="max-height:480px; background:#faf8e8; padding:8px; border-radius:8px">
-    <p class="small">ホストの <code>claude</code> に環境変数を渡すだけ。受信側(Collector〜Grafana)は <code>docker compose up</code> 一発。</p>
-    <aside class="notes">
-      構成はこれだけです。普段ログ基盤を運用されている方なら馴染みのある形だと思います。
-      左のホストで動く Claude Code が、テレメトリを「OTel Collector」という受け口に送ります(OTLP という共通フォーマット、gRPC の 4317 番)。
-      Collector はいわば仕分け係で、数値のメトリクスは Prometheus、ログ/イベントは Loki、トレースは Tempo に振り分け、
-      同時に生 JSON をファイルにも保全します。最後に Grafana で全部まとめて見る。受信側は全部 Docker、compose 一発で立ちます。
-    </aside>
-  </section>
-
-  <!-- 4. デフォルトで取れるもの -->
-  <section>
-    <h2>デフォルトで取れるもの</h2>
+    <div class="eyebrow">3. Architecture</div>
+    <h2>システム構成</h2>
     <div class="cols">
-      <div>
-        <p class="hl">Metrics</p>
-        <span class="tag">token.usage</span><span class="tag">cost.usage</span>
-        <span class="tag">session.count</span><span class="tag">lines_of_code</span>
-        <span class="tag">code_edit.decision</span><span class="tag">active_time</span>
+      <div style="flex:1.4">
+        <figure>
+          <img src="img/architecture.png" alt="architecture" style="max-height:360px;background:#fbfbf3;padding:6px">
+          <figcaption>図1. データフロー。ホストの Claude Code が OTLP(gRPC:4317)で送信し、Collector が信号ごとに振り分ける。</figcaption>
+        </figure>
       </div>
       <div>
-        <p class="hl">Events (logs)</p>
-        <span class="tag">user_prompt</span><span class="tag">tool_result</span>
-        <span class="tag">tool_decision</span><span class="tag">api_request</span>
-        <span class="tag">api_error</span><span class="tag">mcp / auth / skill …</span>
+        <table>
+          <tr><th>要素</th><th>役割</th></tr>
+          <tr><td>OTel Collector</td><td>OTLP 受信・振り分け・ファイル保全</td></tr>
+          <tr><td>Prometheus</td><td>メトリクス蓄積(スクレイプ)</td></tr>
+          <tr><td>Loki</td><td>ログ/イベント蓄積(OTLP push)</td></tr>
+          <tr><td>Tempo</td><td>トレース蓄積</td></tr>
+          <tr><td>Grafana</td><td>横断可視化・相関</td></tr>
+          <tr><td>file exporter</td><td>生 JSON をローカル保全</td></tr>
+        </table>
+        <p class="small">受信側はすべて Docker Compose。ホストは <code>claude</code> に環境変数を渡して起動するのみ。</p>
       </div>
     </div>
-    <p class="small" style="margin-top:18px">
-      共通属性: <code>session.id / user.email / organization.id / terminal.type / model …</code><br>
-      <span class="ok">✓</span> 「誰が・いつ・どのツールを・成否・トークン/コスト」はこれだけで取れる
-    </p>
-    <p class="small warn" style="margin-top:10px">
-      ※ コストは「API 単価で計算した推定値」。Pro/Max などの定額プランでは実際には課金されない(利用量の目安)
-    </p>
-    <aside class="notes">
-      まず素の状態。メトリクスでトークン・コスト・セッション数。
-      イベントで user_prompt、tool_result、api_request など。
-      各レコードに user.email や session.id が付くので、誰がどのツールをいくらで使ったかはこれで分かります。
-      ただし「中身」、入力本文や Claude の回答は、デフォルトでは伏せられています。
-    </aside>
+    <div class="foot"><span>Claude Code Audit PoC</span><span>3 / 14</span></div>
   </section>
 
-  <!-- 5. 山場: privacy フラグで中身まで -->
+  <!-- 4. 実装 -->
   <section>
-    <h2>★ フラグを開けると「中身」まで取れる</h2>
+    <div class="eyebrow">4. Implementation</div>
+    <h2>実装の要点</h2>
+    <div class="cols">
+      <div>
+        <h3>受信側: OTel Collector の設定</h3>
+        <p class="small">対象ファイル: 本リポジトリの <code>otel/config.yaml</code>(Collector コンテナにマウント)。
+           Collector は <b>受信(receivers)→加工(processors)→送信(exporters)</b> という流れ(pipeline)を信号ごとに定義する。
+           本PoC は「OTLP で<b>受信</b>し、各信号を複数の<b>送信先</b>へ同時に流す」だけで加工は行わない。</p>
+        <pre><code class="language-yaml"># otel/config.yaml
+receivers:    # 受け口: Claude Code からの OTLP を受信
+  otlp: { protocols: { grpc: { endpoint: 0.0.0.0:4317 } } }
+exporters:    # 送り先
+  prometheus:    { endpoint: 0.0.0.0:8889 }            # メトリクス
+  otlphttp/loki: { endpoint: http://loki:3100/otlp }   # ログ/イベント
+  otlp/tempo:    { endpoint: tempo:4317 }              # トレース
+  file/logs:     { path: /data/otel-file/logs.json }   # ローカル保全
+service:
+  pipelines:    # 信号ごとに「受信→送信」の経路を定義
+    metrics: { receivers: [otlp], exporters: [prometheus, file/metrics] }
+    logs:    { receivers: [otlp], exporters: [otlphttp/loki, file/logs] }
+    traces:  { receivers: [otlp], exporters: [otlp/tempo, file/traces] }</code></pre>
+      </div>
+      <div>
+        <h3>送信側: Claude Code の恒常設定(組織配布)</h3>
+        <p class="small">対象ファイル: Claude Code の<b>管理者設定ファイル</b> <code>managed-settings.json</code>
+           (Linux/WSL: <code>/etc/claude-code/</code>、macOS: <code>/Library/Application Support/ClaudeCode/</code>、
+           Windows: <code>C:\ProgramData\ClaudeCode\</code>)。<code>env</code> ブロックに記述すると全ユーザへ一括適用され、
+           MDM 等で配布でき、ユーザ側では上書きできない。</p>
+        <pre><code class="language-json">// /etc/claude-code/managed-settings.json
+{
+  "env": {
+    "CLAUDE_CODE_ENABLE_TELEMETRY": "1",
+    "OTEL_METRICS_EXPORTER": "otlp",
+    "OTEL_LOGS_EXPORTER": "otlp",
+    "OTEL_EXPORTER_OTLP_PROTOCOL": "grpc",
+    "OTEL_EXPORTER_OTLP_ENDPOINT": "http://collector.example.com:4317"
+  }
+}</code></pre>
+        <p class="small">出典: 公式ドキュメント「管理者設定」<br>
+           code.claude.com/docs/ja/monitoring-usage#administrator-configuration</p>
+      </div>
+    </div>
+    <div class="foot"><span>Claude Code Audit PoC</span><span>4 / 14</span></div>
+  </section>
+
+  <!-- 5. 取得制御パラメータ -->
+  <section>
+    <div class="eyebrow">4. Implementation</div>
+    <h2>取得粒度の制御パラメータ(プライバシー設計)</h2>
+    <p class="small">既定では機微情報はマスクされる。以下の環境変数を有効化すると、取得内容が段階的に拡張される。</p>
     <table>
-      <tr><th>取りたいもの</th><th>環境変数</th></tr>
-      <tr><td>ユーザ入力 本文</td><td><code>OTEL_LOG_USER_PROMPTS=1</code></td></tr>
-      <tr><td>tool 入力引数 (bash cmd, path…)</td><td><code>OTEL_LOG_TOOL_DETAILS=1</code></td></tr>
-      <tr><td>tool 入出力 コンテンツ</td><td><code>OTEL_LOG_TOOL_CONTENT=1</code> <span class="small">(traces必須)</span></td></tr>
-      <tr><td><span class="hl">Claude 出力本文・会話履歴全文</span></td><td><code>OTEL_LOG_RAW_API_BODIES=1</code></td></tr>
-      <tr><td>分散トレース (interaction→tool)</td><td><code>CLAUDE_CODE_ENHANCED_TELEMETRY_BETA=1</code></td></tr>
+      <tr><th>環境変数</th><th>有効化で取得される情報</th><th>既定</th></tr>
+      <tr><td><code>OTEL_LOG_USER_PROMPTS</code></td><td>ユーザ入力の本文(<code>prompt</code>)</td><td>OFF</td></tr>
+      <tr><td><code>OTEL_LOG_TOOL_DETAILS</code></td><td>ツール入力引数(bash コマンド・対象パス・MCP名 等)</td><td>OFF</td></tr>
+      <tr><td><code>OTEL_LOG_TOOL_CONTENT</code></td><td>ツール入出力の内容(トレース必須・60KB 切詰)</td><td>OFF</td></tr>
+      <tr><td><code>OTEL_LOG_RAW_API_BODIES</code></td><td>Messages API の request/response 全文(=会話履歴・モデル出力本文)</td><td>OFF</td></tr>
+      <tr><td><code>CLAUDE_CODE_ENHANCED_TELEMETRY_BETA</code> + <code>OTEL_TRACES_EXPORTER</code></td><td>分散トレース(span)の出力(ベータ)</td><td>OFF</td></tr>
     </table>
-    <p class="small">既定はすべて OFF(プライバシー)。<span class="warn">有効化すると会話全文・bash コマンド・ファイル内容が残る → 取扱い注意</span></p>
-    <aside class="notes">
-      ここが山場。これらのフラグを開けると、入力本文、ツールの引数、ツールの入出力、
-      そして Claude の出力本文・会話履歴の全文、さらに分散トレースまで取れます。
-      デフォルト OFF なのはプライバシーのため。逆に言うと、開ければ監査に必要なものはほぼ全部取れる。
-      次のデモで実際に取れているところを見せます。
-    </aside>
+    <p class="small"><span class="warn">注:</span> <code>OTEL_LOG_RAW_API_BODIES</code> は会話履歴の全文を含むため最も機微である。
+       公式ドキュメントでも、これを有効化することは他の各環境変数が開示する情報すべてを含めることに同意する意味だと明記されている。
+       なお <code>=file:&lt;dir&gt;</code> を指定すると、60KB で切り詰めずに全文をファイルへ保存できる。</p>
+    <p class="small">出典: 公式ドキュメント「設定の詳細 &gt; 一般的な設定変数」および「トレース(ベータ)」<br>
+       code.claude.com/docs/ja/monitoring-usage#common-configuration-variables ／ #traces-beta</p>
+    <div class="foot"><span>Claude Code Audit PoC</span><span>5 / 14</span></div>
   </section>
 
-  <!-- 6. デモ -->
+  <!-- 6. 検証方法 -->
   <section>
-    <h2>デモ: 実際に取れている</h2>
-    <img src="../demo/demo.gif" alt="terminal demo" style="max-height:560px">
-    <p class="small">入力本文 → Claude 出力本文 → tool 引数 → トレース階層 が全部ローカルに</p>
-    <aside class="notes">
-      デモです。フル監査モードで claude を1回叩いて、
-      ① 入力本文、② Claude の出力本文、③ ツールの入力引数、④ Tempo のトレース階層、
-      の順に、ローカルに残ったものを表示しています。全部手元のファイルとバックエンドに入っています。
-    </aside>
+    <div class="eyebrow">5. Methodology</div>
+    <h2>検証方法</h2>
+    <h3>手順</h3>
+    <ol>
+      <li>各サービス(Collector / Prometheus / Loki / Tempo / Grafana)のコンテナを起動し、起動完了(疎通)を確認する。</li>
+      <li>テレメトリを有効化した状態(§4・§5 の環境変数を付けた状態)で Claude Code を起動し、
+          自動実行モードでツールを使うプロンプト(ファイル作成・bash 実行など)を1回与える。</li>
+      <li>§5 の環境変数をすべて有効化し、トレースも有効化した「取得範囲を最大化した状態」でも同様に実行する。</li>
+      <li>送信されたデータが各保存先(Prometheus / Loki / Tempo)とローカル保存ファイルに<b>実際に届いているか</b>を確認し、
+          どの<b>メトリクス</b>(数値項目)・<b>イベント</b>(記録された出来事)・<b>属性</b>(各記録に付くキー値、例: <code>user.email</code>)・
+          <b>トレース</b>(処理の親子構造)が取得できたかを実データで点検する。</li>
+    </ol>
+    <p class="small"><b>補足:</b> 各イベントには、同じプロンプトに由来する記録を束ねる識別子 <code>prompt.id</code> が付く。
+       これを用いて、1つの入力に対する一連の記録(入力 → API 呼び出し → ツール実行 → 出力)が
+       欠けなく時系列でつながることを確認した。</p>
+    <h3>検証環境(バージョン)</h3>
+    <p class="small">Claude Code <b>2.1.179</b> / otel-collector-contrib <b>0.115.1</b> / Prometheus <b>2.55.1</b> /
+       Loki <b>3.3.2</b> / Tempo <b>2.6.1</b> / Grafana <b>11.4.0</b>。ホスト: WSL2 (Linux)。</p>
+    <div class="foot"><span>Claude Code Audit PoC</span><span>6 / 14</span></div>
   </section>
 
-  <!-- 7. Grafana -->
+  <!-- 7. 結果1: メトリクス -->
   <section>
-    <h2>Grafana で可視化（GUI ウォークスルー）</h2>
-    <video src="../demo/gui-demo.mp4" data-autoplay muted loop controls
-           style="max-height:560px; border-radius:8px"></video>
-    <p class="small">ダッシュボード → ログ(Loki) → トレース(Tempo) を字幕付きで解説 / 詳細は <code>presentation/gui-guide.md</code></p>
-    <aside class="notes">
-      可視化は Grafana。動画で順に解説しています。
-      まずダッシュボードで“量”の全体像、トークン・コスト・セッション数。
-      次に Loki でイベントの“中身”、行を開くと user.email や入力本文まで属性が見える。
-      最後に Tempo でトレース、1プロンプトの処理の流れと、ツールのどこで時間がかかったかが分解できます。
-      ログの trace_id からトレースへ、相互ジャンプも設定済みです。
-    </aside>
+    <div class="eyebrow">6. Results</div>
+    <h2>結果 (1) メトリクス</h2>
+    <div class="cols">
+      <div>
+        <table>
+          <tr><th>メトリクス(Prometheus 名)</th><th>意味</th></tr>
+          <tr><td><code>claude_code_token_usage_tokens_total</code></td><td>トークン数(type: input/output/cacheRead/cacheCreation)</td></tr>
+          <tr><td><code>claude_code_cost_usage_USD_total</code></td><td>推定コスト(model 別)</td></tr>
+          <tr><td><code>claude_code_session_count_total</code></td><td>セッション数</td></tr>
+          <tr><td><code>claude_code_lines_of_code_count_total</code></td><td>変更行数(added/removed)</td></tr>
+          <tr><td><code>claude_code_code_edit_tool_decision_total</code></td><td>編集ツールの許可/拒否</td></tr>
+          <tr><td><code>claude_code_active_time_seconds_total</code></td><td>実利用時間</td></tr>
+        </table>
+        <p class="small">ラベルに <code>model / session_id / user_email / organization_id / terminal_type / service_version</code> 等を保持。</p>
+        <p class="small"><span class="warn">コストは API 単価換算の推定値</span>であり、定額プラン(Pro/Max)では実課金されない(利用量の目安)。</p>
+        <p class="small">出典: 公式ドキュメント「メトリクス」「メトリクスの詳細」「標準属性」<br>
+           code.claude.com/docs/ja/monitoring-usage#metrics ／ #metric-details ／ #standard-attributes</p>
+      </div>
+      <div>
+        <figure>
+          <img src="img/dashboard-full.png" alt="dashboard" style="max-height:420px">
+          <figcaption>図2. Grafana ダッシュボード(実測値で描画)。累計トークン・推定コスト・セッション数とトークン種別/モデル別の推移。</figcaption>
+        </figure>
+      </div>
+    </div>
+    <div class="foot"><span>Claude Code Audit PoC</span><span>7 / 14</span></div>
   </section>
 
-  <!-- 8. まとめ -->
-  <section data-background-gradient="linear-gradient(to bottom, #0f3460, #1a1a2e)">
+  <!-- 8. 結果2: イベント/ログ -->
+  <section>
+    <div class="eyebrow">6. Results</div>
+    <h2>結果 (2) イベント / ログ</h2>
+    <p class="small">Claude Code の「ログ」信号は、自由記述のテキストログ行ではなく、<code>event.name</code> を持つ
+       <b>構造化イベント</b>として OTLP ログで出力される(=本資料の「ログ」はこのイベント群を指す)。
+       Loki では <code>{service_name="claude-code"} | event_name="…"</code> で絞り込める。主要イベントと監査上重要な属性(実測)を示す。</p>
+    <table>
+      <tr><th>イベント (<code>event.name</code>)</th><th>主な属性</th><th>監査観点</th></tr>
+      <tr><td><code>user_prompt</code></td><td><code>prompt_length</code> / <code>prompt</code>(本文※)</td><td><b>ユーザ入力</b></td></tr>
+      <tr><td><code>api_request</code></td><td><code>model, input/output/cache tokens, cost_usd, duration_ms</code></td><td>トークン・コスト</td></tr>
+      <tr><td><code>api_response_body</code> ※</td><td><code>body</code>(応答 JSON = <b>モデル出力本文</b>)</td><td><b>Claude 出力</b></td></tr>
+      <tr><td><code>tool_result</code></td><td><code>tool_name, success, duration_ms, tool_input</code>(引数※)</td><td><b>ツール実行</b></td></tr>
+      <tr><td><code>tool_decision</code></td><td><code>tool_name, decision(accept/reject), source</code></td><td>権限判断</td></tr>
+      <tr><td><code>api_error / api_refusal</code></td><td><code>status_code, error, stop_reason</code></td><td>失敗・拒否</td></tr>
+      <tr><td>他</td><td colspan="2"><code>auth, mcp_server_connection, permission_mode_changed, plugin_loaded, skill_activated, at_mention …</code></td></tr>
+    </table>
+    <p class="small">全イベント共通: <code>session.id / user.id / user.email / organization.id / terminal.type / event.timestamp / prompt.id</code>。
+       <span class="small">(※ は §5 のフラグ有効時のみ。)</span></p>
+    <p class="small">出典: 公式ドキュメント「イベント」(各イベント定義・属性)<br>
+       code.claude.com/docs/ja/monitoring-usage#events ／ #user-prompt-event ／ #tool-result-event ／ #api-response-body-event</p>
+    <div class="foot"><span>Claude Code Audit PoC</span><span>8 / 14</span></div>
+  </section>
+
+  <!-- 9. 結果2補足: ログ画面 -->
+  <section>
+    <div class="eyebrow">6. Results</div>
+    <h2>実機デモ: CLI 実行 ⇄ メトリクス/ログ/トレース</h2>
+    <figure>
+      <video src="../demo/walkthrough.mp4" data-autoplay muted loop controls style="max-height:500px"></video>
+      <figcaption>図3. 統合デモ(動画)。①実機の Claude Code CLI でタスクを実行(Write/Read/Bash の実行が画面に出る) →
+        ②結果1 メトリクス → ③結果2 ログ → ④結果3 トレース。各章で 1回の実行を構成する操作
+        (①入力→②Write→③Read→④Bash→⑤応答)が、どのメトリクス・ログ・トレースに対応するかを日本語で明示。
+        ※ メール・組織ID・各種 UUID はマスク処理済み。</figcaption>
+    </figure>
+    <p class="small">対応関係(要約): <b>①入力</b>=user_prompt / <b>②③④ツール</b>=tool_result(Write・Read・Bash)・tool_decision /
+       <b>⑤応答</b>=api_request・api_response_body・token/cost メトリクス / トレースは <code>interaction → llm_request・tool→execution</code>。
+       補足動画: 同一時系列の左右対比 <code>demo/side-by-side.mp4</code>、Grafana 各画面の詳細 <code>demo/gui-demo.mp4</code> ＋ <code>presentation/gui-guide.md</code>。</p>
+    <div class="foot"><span>Claude Code Audit PoC</span><span>9 / 14</span></div>
+  </section>
+
+  <!-- 10. 結果3: トレース -->
+  <section>
+    <div class="eyebrow">6. Results</div>
+    <h2>結果 (3) 分散トレース</h2>
+    <p class="small">
+      <b>分散トレース</b>とは、1件の処理(ここでは「ユーザの1プロンプト処理」)が内部で行った個々の処理を、
+      <b>span</b>(=処理区間。名前・開始/終了時刻・親子関係をもつ最小単位)の集まりとして記録したもの。
+      span 同士の親子関係を <b>span 階層</b>と呼ぶ。<br>
+      Claude Code のトレース出力は現在<b>ベータ提供</b>で、§5 の <code>CLAUDE_CODE_ENHANCED_TELEMETRY_BETA</code> と
+      <code>OTEL_TRACES_EXPORTER</code> を設定すると出力される。本検証ではこれを有効化して実行し、
+      生成された span が <b>Tempo に送信・保存され、Grafana で参照できる</b>ことを確認した。</p>
+    <div class="cols">
+      <div>
+        <h3>span 階層(実測)</h3>
+        <pre><code class="language-text">claude_code.interaction           (ユーザの1ターン全体)
+├── claude_code.llm_request        (API 呼び出し。複数回あり得る)
+├── claude_code.tool               (ツール実行)
+│   ├── claude_code.tool.blocked_on_user  (権限承認の待ち時間)
+│   └── claude_code.tool.execution        (ツール本体の実行時間)
+└── claude_code.llm_request</code></pre>
+        <p class="small">各 span は所要時間をもつため、1ターンの時間を「API 待ち / ツール実行 / 権限待ち」へ
+           分解でき、どこが遅いか(ボトルネック)を特定できる。<code>llm_request</code> span は
+           <code>model / stop_reason / ttft_ms / tokens / request_id</code> 等を保持する。</p>
+        <p class="small">出典: 公式ドキュメント「トレース(ベータ)」および span 階層・span 属性の各節<br>
+           code.claude.com/docs/ja/monitoring-usage#traces-beta ／ #span-hierarchy ／ #span-attributes</p>
+      </div>
+      <div>
+        <figure>
+          <img src="img/trace-waterfall.png" alt="trace waterfall" style="max-height:360px">
+          <figcaption>図4. Tempo のトレース表示(実測)。左に span 階層、右に各 span を開始時刻順に並べた横棒
+            (棒の長さ=所要時間)。これにより処理内訳が一目で分かる。</figcaption>
+        </figure>
+      </div>
+    </div>
+    <div class="foot"><span>Claude Code Audit PoC</span><span>10 / 14</span></div>
+  </section>
+
+  <!-- 11. 取得可能性の総括 -->
+  <section>
+    <div class="eyebrow">6. Results</div>
+    <h2>取得可能性の総括</h2>
+    <table>
+      <tr><th>監査したい情報</th><th>取得</th><th>条件</th></tr>
+      <tr><td>いつ・誰が(user/session/org)・量(token/cost)</td><td class="ok">可</td><td>既定</td></tr>
+      <tr><td>どのツールを・成否・所要時間・権限判断</td><td class="ok">可</td><td>既定</td></tr>
+      <tr><td>ユーザ入力 本文</td><td class="ok">可</td><td><code>OTEL_LOG_USER_PROMPTS</code></td></tr>
+      <tr><td>ツール入力引数 / 入出力内容</td><td class="ok">可</td><td><code>OTEL_LOG_TOOL_DETAILS</code> / <code>…_CONTENT</code></td></tr>
+      <tr><td><b>モデル出力本文・会話履歴全文</b></td><td class="ok">可</td><td><code>OTEL_LOG_RAW_API_BODIES</code></td></tr>
+      <tr><td>分散トレース(処理の流れ・所要時間)</td><td class="ok">可</td><td>ENHANCED_TELEMETRY_BETA</td></tr>
+      <tr><td><b>拡張思考 (extended thinking) 本文</b></td><td class="warn">不可</td><td>常にマスク(構造的制約)</td></tr>
+    </table>
+    <p class="small"><b>拡張思考(extended thinking)</b>とは、モデルが回答を出す前に行う内部推論(思考)のテキストを指す。
+       会話本文を取得できる唯一の経路は raw body 出力(<code>OTEL_LOG_RAW_API_BODIES</code>)だが、公式ドキュメントでは
+       <code>api_response_body</code> は「拡張思考コンテンツはマスクされます」、<code>api_request_body</code> も
+       「前のアシスタントターンの拡張思考コンテンツはマスクされます」と明記している。
+       <b>すなわち入力側・出力側の双方で拡張思考だけは除外され、テレメトリ経由では取得できない</b>。</p>
+    <p class="small">結論: <b>テレメトリ単独でほぼ全ての監査情報を取得・相関できる</b>。取得できないのは拡張思考本文のみで、
+       これも含めた会話の完全保全が必要な場合はローカルのセッションログ <code>~/.claude/projects/**/*.jsonl</code> を併用できる。</p>
+    <p class="small">出典: 公式ドキュメント「API リクエストボディイベント」「API レスポンスボディイベント」<br>
+       code.claude.com/docs/ja/monitoring-usage#api-request-body-event ／ #api-response-body-event</p>
+    <div class="foot"><span>Claude Code Audit PoC</span><span>11 / 14</span></div>
+  </section>
+
+  <!-- 12. 考察 -->
+  <section>
+    <div class="eyebrow">7. Discussion</div>
+    <h2>考察</h2>
+    <ul>
+      <li><b>監査要件はテレメトリ単独でほぼ満たせる(§結果より)。</b> 入力・出力・ツール入出力・処理の流れまで取得・相関でき、
+          構造的に取得できないのは拡張思考本文のみであった。</li>
+      <li><b>取得範囲と機微性はトレードオフ(§5・§結果より)。</b> 取得を広げるほど、会話本文・bash コマンド・ファイル内容など
+          収集データ自体の機微性が高まる。</li>
+      <li><b>ゆえに取得範囲は目的に応じて段階的に絞るべき(§5 より)。</b> 取得粒度は環境変数で制御できるため、
+          監査目的に必要な最小限のみを有効化することが妥当である。</li>
+      <li><b>収集データの保護設計が前提となる。</b> 会話本文等を含みうるため、保存先・保持期間・アクセス制御の設計が必要。
+          本検証でも会話全文・生ログは外部公開の対象から除外した(§検証方法・成果物の扱い)。</li>
+    </ul>
+    <div class="foot"><span>Claude Code Audit PoC</span><span>12 / 14</span></div>
+  </section>
+
+  <!-- 13. まとめ -->
+  <section>
+    <div class="eyebrow">8. Conclusion</div>
     <h2>まとめ</h2>
     <ul>
-      <li><span class="ok">✓</span> Laptop + docker compose だけで監査基盤が立つ</li>
-      <li><span class="ok">✓</span> テレメトリ単独で<br>　入力・出力・tool入出力・トレースまで取得可能</li>
-      <li><span class="warn">!</span> 唯一の限界 = <span class="hl">extended thinking はマスク</span></li>
-      <li><span class="warn">!</span> フルモードは機微情報の塊 → 保存先・保持期間・アクセス制御に注意</li>
+      <li>Laptop と Docker Compose のみで、外部にデータを出さない監査基盤を構築できた。</li>
+      <li>Claude Code の OpenTelemetry 出力<b>単独で、ユーザ入力・モデル出力・ツール入出力・分散トレースまで</b>
+          取得・相関できることを実機で確認した。</li>
+      <li>取得粒度は環境変数で段階的に制御でき、構造的に取得できないのは<b>拡張思考本文のみ</b>であった。</li>
+      <li>取得範囲を広げるほど収集データの機微性が高まるため、運用では
+          <b>目的に応じた最小限の有効化</b>と<b>収集データの保護設計</b>が前提となる。</li>
     </ul>
-    <p class="small">リポジトリ: <code>claude-code-audit-poc</code> / README に再現手順</p>
-    <p class="small">出典: code.claude.com/docs/ja/monitoring-usage</p>
-    <aside class="notes">
-      まとめ。Laptop と docker compose だけで監査基盤は立つ。
-      テレメトリ単独で、入力・出力・ツール入出力・トレースまで取れる。
-      唯一取れないのは extended thinking の本文だけ。
-      ただしフルモードは会話全文が残るので、保存先や保持期間、アクセス制御はちゃんと設計してください。以上です。
-    </aside>
+    <div class="foot"><span>Claude Code Audit PoC</span><span>13 / 14</span></div>
+  </section>
+
+  <!-- 14. 参考文献 -->
+  <section>
+    <div class="eyebrow">References</div>
+    <h2>参考文献・付録</h2>
+    <ol class="small">
+      <li>Anthropic. 「Claude Code モニタリング (OpenTelemetry)」. <br>
+          https://code.claude.com/docs/ja/monitoring-usage <br>
+          主な参照箇所(アンカー): #administrator-configuration(管理者設定)、#common-configuration-variables(環境変数)、
+          #metrics・#metric-details(メトリクス)、#events ほか各イベント定義、#standard-attributes(標準属性)、
+          #traces-beta・#span-hierarchy・#span-attributes(トレース)、#api-response-body-event(拡張思考のマスク)。</li>
+      <li>OpenTelemetry. 「OTLP Exporter Configuration」. https://opentelemetry.io/docs/specs/otel/protocol/exporter/</li>
+      <li>Grafana Labs. Loki(OTLP ingestion)/ Tempo / grafana-image-renderer 各公式ドキュメント. https://grafana.com/docs/</li>
+    </ol>
+    <h3>付録: 本検証で確認したコンポーネント・バージョン</h3>
+    <p class="small">Claude Code 2.1.179 / otel-collector-contrib 0.115.1 / Prometheus 2.55.1 / Loki 3.3.2 / Tempo 2.6.1 / Grafana 11.4.0.</p>
+    <p class="small">ライトニング版スライド: <code>presentation/index-lightning.html</code> / GUI 各画面の詳細解説: <code>presentation/gui-guide.md</code>.</p>
+    <div class="foot"><span>Claude Code Audit PoC</span><span>14 / 14</span></div>
   </section>
 
 </div></div>
-<div class="footer">Claude Code Audit PoC</div>
 
 <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/notes/notes.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/highlight.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/notes/notes.js"></script>
 <script>
   Reveal.initialize({
-    hash: true, slideNumber: 'c/t', transition: 'slide',
-    plugins: [ RevealNotes, RevealHighlight ]
+    hash:true, slideNumber:false, transition:'none',
+    center:false, width:1280, height:840, margin:0.04,
+    plugins:[ RevealHighlight, RevealNotes ]
   });
 </script>
 </body>

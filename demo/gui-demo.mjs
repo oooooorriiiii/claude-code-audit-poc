@@ -88,6 +88,39 @@ async function clearHighlight(page){ await page.evaluate(()=>document.getElement
 
 const TOTAL = 6;
 
+// ===========================================================================
+// 字幕(画面解説テキスト)。★ここを編集して `node demo/gui-demo.mjs` を再実行すると
+//   動画の説明文だけを差し替えられる(GUI操作のロジックは変更不要)。
+//   body には簡単な HTML(<b> <code> 等)を使える。
+// ===========================================================================
+const STEPS = {
+  titleCard: { big:'Grafana で見る Claude Code 監査',
+               sub:'ダッシュボード → ログ(Loki) → トレース(Tempo) を順に解説' },
+  dashboard: { step:1, total:TOTAL, title:'ダッシュボード: 利用状況の全体像',
+    body:'上段の大きな数字は「累計トークン数・推定コスト・セッション数・変更行数」。一目で“どれだけ使ったか”が分かります。',
+    sub:'コストは API 単価換算の推定値(定額プランでは実課金されない利用量の目安)' },
+  dashboard2:{ step:1, total:TOTAL, title:'ダッシュボード: 時系列とイベント',
+    body:'中段は「トークン種別ごとの推移」と「モデル別コスト推移」。下段はログ(イベント)の一覧です。',
+    sub:'右上の時間範囲(Last 3 hours)を変えれば任意期間を集計できます' },
+  loki:      { step:2, total:TOTAL, title:'ログ/イベント (Loki): 何が起きたか',
+    body:'<code>{service_name="claude-code"}</code> で Claude Code のイベントを時系列表示。1行が1イベント(user_prompt / tool_result / api_request …)。',
+    sub:'“いつ・どの種類のイベントが起きたか”の生ログがここに溜まります' },
+  lokiDetail:{ step:2, total:TOTAL, title:'ログ/イベント (Loki): 中身の属性',
+    body:'行を開くと属性が見えます。<b>session.id / user.email / organization.id</b> に加え、フル監査時は <b>prompt(入力本文)</b> まで。',
+    sub:'「誰が・どのセッションで・何を入力したか」を1イベント単位で監査できる' },
+  trace:     { step:3, total:TOTAL, title:'トレース (Tempo): 処理の流れ',
+    body:'1つのプロンプト処理を1本のトレースとして可視化。左のツリーが span の親子関係、右の横棒が各 span の所要時間です。',
+    sub:'interaction(ユーザの1ターン)の下に llm_request(API)や tool がぶら下がる' },
+  traceTime: { step:4, total:TOTAL, title:'トレース (Tempo): どこで時間がかかったか',
+    body:'<b>tool</b> の下に <b>blocked_on_user(権限待ち)</b> と <b>execution(実行)</b> が分かれて記録。横棒の長さ＝所要時間。',
+    sub:'「ツールのどの段階が遅いか」「権限承認にどれだけ待ったか」まで分解できる' },
+  correlation:{ step:5, total:TOTAL, title:'相関: トレース ⇄ ログ ⇄ メトリクス',
+    body:'ログの <code>trace_id</code> からトレースへ、トレースから関連ログへワンクリックで往復できるよう datasource にリンク設定済み。',
+    sub:'「数字の異常 → 該当ログ → その処理のトレース」と一気通貫で追跡できる' },
+  endCard:   { big:'Grafana だけで監査が完結',
+               sub:'メトリクスで“量”・ログで“中身”・トレースで“流れ”<br>すべてローカルの Laptop 内で追跡できる' },
+};
+
 (async () => {
   const tid = await latestTraceId();
   console.log('trace id:', tid);
@@ -131,12 +164,12 @@ const TOTAL = 6;
 
   // ===== 0. タイトルカード =====
   await page.goto(`${G}/?orgId=1`, { waitUntil: 'domcontentloaded' });
-  await page.evaluate(() => {
+  await page.evaluate((t) => {
     const d = document.createElement('div'); d.id='__title';
     d.style.cssText='position:fixed;inset:0;z-index:2147483647;background:#0a0c14;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:sans-serif';
-    d.innerHTML='<div style="font-size:52px;font-weight:800;color:#9be8d8">Grafana で見る Claude Code 監査</div><div style="font-size:26px;margin-top:18px;color:#ccc">ダッシュボード → ログ(Loki) → トレース(Tempo) を順に解説</div>';
+    d.innerHTML=`<div style="font-size:52px;font-weight:800;color:#9be8d8">${t.big}</div><div style="font-size:26px;margin-top:18px;color:#ccc">${t.sub}</div>`;
     document.body.appendChild(d);
-  });
+  }, STEPS.titleCard);
   await sleep(3500);
   await page.evaluate(() => document.getElementById('__title')?.remove());
 
@@ -144,15 +177,11 @@ const TOTAL = 6;
   await page.goto(`${G}/d/claude-code-audit/claude-code-audit?orgId=1&from=now-3h&to=now&kiosk`, { waitUntil: 'domcontentloaded' });
   try { await page.waitForSelector('text=Total tokens', { timeout: 20000 }); } catch {}
   await sleep(2500);
-  await caption(page, { step:1, total:TOTAL, title:'ダッシュボード: 利用状況の全体像',
-    body:'上段の大きな数字は「累計トークン数・推定コスト・セッション数・変更行数」。一目で“どれだけ使ったか”が分かります。',
-    sub:'コストは API 単価換算の推定値(定額プランでは実課金されない利用量の目安)' });
+  await caption(page, STEPS.dashboard);
   await sleep(7000);
 
   // 時系列パネルへ言及
-  await caption(page, { step:1, total:TOTAL, title:'ダッシュボード: 時系列とイベント',
-    body:'中段は「トークン種別ごとの推移」と「モデル別コスト推移」。下段はログ(イベント)の一覧です。',
-    sub:'右上の時間範囲(Last 3 hours)を変えれば任意期間を集計できます' });
+  await caption(page, STEPS.dashboard2);
   await sleep(6500);
   await clearCaption(page);
 
@@ -163,9 +192,7 @@ const TOTAL = 6;
       range: { from:'now-3h', to:'now' } }
   }));
   await page.goto(`${G}/explore?orgId=1&schemaVersion=1&panes=${lokiPane}`, { waitUntil:'domcontentloaded' });
-  await caption(page, { step:2, total:TOTAL, title:'ログ/イベント (Loki): 何が起きたか',
-    body:'<code>{service_name="claude-code"}</code> で Claude Code のイベントを時系列表示。1行が1イベント(user_prompt / tool_result / api_request …)。',
-    sub:'“いつ・どの種類のイベントが起きたか”の生ログがここに溜まります' });
+  await caption(page, STEPS.loki);
   // ログが実際に描画されるまで待つ
   try { await page.waitForSelector('text=/claude_code\\./', { timeout: 25000 }); } catch (e) { console.log('loki wait:', e.message); }
   await sleep(6000);
@@ -177,9 +204,7 @@ const TOTAL = 6;
     await r.click({ timeout: 6000 });
     await sleep(2500);
   } catch (e) { console.log('log row expand skip:', e.message); }
-  await caption(page, { step:2, total:TOTAL, title:'ログ/イベント (Loki): 中身の属性',
-    body:'行を開くと属性が見えます。<b>session.id / user.email / organization.id</b> に加え、フル監査時は <b>prompt(入力本文)</b> まで。',
-    sub:'「誰が・どのセッションで・何を入力したか」を1イベント単位で監査できる' });
+  await caption(page, STEPS.lokiDetail);
   await sleep(8500);
   await clearCaption(page);
 
@@ -193,13 +218,9 @@ const TOTAL = 6;
     await page.goto(`${G}/explore?orgId=1&schemaVersion=1&panes=${tmpPane}`, { waitUntil:'domcontentloaded' });
     try { await page.waitForSelector('text=claude_code.interaction', { timeout: 25000 }); } catch (e) { console.log('tempo wait:', e.message); }
     await sleep(4500);
-    await caption(page, { step:3, total:TOTAL, title:'トレース (Tempo): 処理の流れ',
-      body:'1つのプロンプト処理を1本のトレースとして可視化。左のツリーが呼び出し階層、右の帯(ウォーターフォール)が各処理の時間です。',
-      sub:'interaction(ユーザの1ターン)の下に llm_request(API)や tool がぶら下がる' });
+    await caption(page, STEPS.trace);
     await sleep(8000);
-    await caption(page, { step:4, total:TOTAL, title:'トレース (Tempo): どこで時間がかかったか',
-      body:'<b>tool</b> の下に <b>blocked_on_user(権限待ち)</b> と <b>execution(実行)</b> が分かれて記録。帯の長さ＝所要時間。',
-      sub:'「ツールのどの段階が遅いか」「権限承認にどれだけ待ったか」まで分解できる' });
+    await caption(page, STEPS.traceTime);
     await sleep(8000);
     await clearCaption(page);
   } else {
@@ -207,19 +228,17 @@ const TOTAL = 6;
   }
 
   // ===== 5. 相関 (トレース ⇄ ログ) =====
-  await caption(page, { step:5, total:TOTAL, title:'相関: トレース ⇄ ログ ⇄ メトリクス',
-    body:'ログの <code>trace_id</code> からトレースへ、トレースから関連ログへワンクリックで往復できるよう datasource にリンク設定済み。',
-    sub:'「数字の異常 → 該当ログ → その処理のトレース」と一気通貫で追跡できる' });
+  await caption(page, STEPS.correlation);
   await sleep(7500);
 
   // ===== 6. まとめカード =====
-  await page.evaluate(() => {
+  await page.evaluate((e) => {
     const d = document.createElement('div'); d.id='__end';
     d.style.cssText='position:fixed;inset:0;z-index:2147483647;background:#0a0c14;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:sans-serif;text-align:center';
-    d.innerHTML='<div style="font-size:46px;font-weight:800;color:#9be8d8">Grafana だけで監査が完結</div>'+
-      '<div style="font-size:24px;margin-top:20px;line-height:1.7;color:#ddd">メトリクスで“量”・ログで“中身”・トレースで“流れ”<br>すべてローカルの Laptop 内で追跡できる</div>';
+    d.innerHTML=`<div style="font-size:46px;font-weight:800;color:#9be8d8">${e.big}</div>`+
+      `<div style="font-size:24px;margin-top:20px;line-height:1.7;color:#ddd">${e.sub}</div>`;
     document.body.appendChild(d);
-  });
+  }, STEPS.endCard);
   await sleep(4000);
 
   await ctx.close();   // ← これで webm が確定
