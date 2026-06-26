@@ -1,0 +1,5 @@
+# Marp CLI 設定(presentation/ ディレクトリ用)
+# html:true … スライド内の <div class="eyebrow"> などの簡単な HTML を許可
+# allowLocalFiles:true … PDF/HTML 出力時にローカル画像(img/*.png)を埋め込む
+html: true
+allowLocalFiles: true
