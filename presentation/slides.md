@@ -6,7 +6,23 @@ header: 'Claude Code Audit PoC'
 footer: 'OpenTelemetry を活用した Claude Code の Observability 検証'
 title: OpenTelemetry を活用した Claude Code の Observability 検証
 style: |
-  section { font-family:"Noto Sans CJK JP","Hiragino Sans","Yu Gothic",sans-serif; font-size:21px; color:#1c2330; padding:42px 54px 60px; }
+  :root {
+    /* 全スライド共通の背景画像(ウォーターマーク等)。未使用なら none のまま。
+       使う場合は次のどちらか:  url("img/bg.png")   /   url("data:image/png;base64,XXXX") */
+    --background-image: none;
+    /* 表紙(titlepage)のロゴ画像。未使用なら none。例: url("img/logo.png") / base64 も可 */
+    --logo-image: none;
+    --color-background: #ffffff;
+  }
+  section { font-family:"Noto Sans CJK JP","Hiragino Sans","Yu Gothic",sans-serif; font-size:21px; color:#1c2330; padding:42px 54px 60px;
+            background-color: var(--color-background);
+            background-image: var(--background-image);
+            background-size: cover; background-repeat: no-repeat; background-position: center; }
+  /* 表紙だけロゴを左上に配置(本文スライドには出さない) */
+  section.titlepage { padding:70px;
+            background-color: var(--color-background);
+            background-image: var(--logo-image);
+            background-size: 20%; background-repeat: no-repeat; background-position: top 10% left 7%; }
   h1 { color:#0b3d57; font-size:34px; line-height:1.3; margin:.2em 0; }
   h2 { color:#0b3d57; font-size:27px; border-bottom:3px solid #0e7490; padding-bottom:6px; margin:0 0 12px; }
   h3 { color:#0e7490; font-size:19px; margin:12px 0 4px; }
@@ -29,6 +45,7 @@ style: |
   section::after { color:#9aa3b0; font-size:13px; }
 ---
 
+<!-- _class: titlepage -->
 <!-- _paginate: false -->
 <!-- _header: '' -->
 <!-- _footer: '' -->
